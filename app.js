@@ -1,87 +1,43 @@
 import { db } from "./supabase.js";
 
-/**
- * 🔥 讀取商品列表
- */
-async function load() {
-  const { data, error } = await db.from("products").select("*");
+console.log("🔥 app.js loaded");
 
-  if (error) {
-    console.error("LOAD ERROR:", error);
-    alert("載入失敗：" + error.message);
-    return;
-  }
-
-  const list = document.getElementById("list");
-
-  if (!data || data.length === 0) {
-    list.innerHTML = "<p>目前沒有追蹤商品</p>";
-    return;
-  }
-
-  list.innerHTML = data.map(p => `
-    <div class="card">
-      <h3>${p.name || "（尚未解析）"}</h3>
-
-      <p class="stock ${p.stock ? "ok" : "no"}">
-        ${p.stock ? "🟢 有貨" : "🔴 缺貨"}
-      </p>
-
-      <p>💰 ${p.price ?? "-"}</p>
-
-      <a href="${p.url}" target="_blank">🔗 前往商品</a>
-    </div>
-  `).join("");
-}
-
-
-/**
- * 🔥 新增商品
- */
 async function addProduct() {
-  const urlInput = document.getElementById("url");
-  const url = urlInput.value.trim();
+  const url = document.getElementById("url").value;
 
-  if (!url) {
-    alert("請輸入商品網址");
-    return;
-  }
+  console.log("addProduct:", url);
 
-  console.log("🚀 新增商品:", url);
-
-  const { data, error } = await db.from("products").insert([
-    { url }
-  ]);
+  const { error } = await db.from("products").insert([{ url }]);
 
   if (error) {
-    console.error("INSERT ERROR:", error);
-    alert("新增失敗：" + error.message);
+    alert(error.message);
     return;
   }
 
-  console.log("✅ 新增成功:", data);
-
-  urlInput.value = "";
-
-  await load();
-}
-
-
-/**
- * 🔥 初始化
- */
-function init() {
-  const btn = document.getElementById("addBtn");
-
-  if (!btn) {
-    console.error("❌ 找不到 addBtn（HTML 有問題）");
-    return;
-  }
-
-  btn.addEventListener("click", addProduct);
-
-  console.log("✅ app.js 初始化完成");
   load();
 }
 
-init();
+async function load() {
+  const { data } = await db.from("products").select("*");
+
+  document.getElementById("list").innerHTML =
+    data.map(p => `
+      <div>
+        <h3>${p.name || "未解析"}</h3>
+        <a href="${p.url}" target="_blank">開啟</a>
+      </div>
+    `).join("");
+}
+
+/**
+ * ⭐ 關鍵：用 DOM 綁定，不用 onclick
+ */
+document.addEventListener("DOMContentLoaded", () => {
+  const btn = document.getElementById("addBtn");
+
+  console.log("btn =", btn);
+
+  btn.addEventListener("click", addProduct);
+
+  load();
+});
