@@ -1,42 +1,29 @@
-from supabase_client import supabase
-from parser import parse_pchome
-from telegram import send
+from playwright.sync_api import sync_playwright
 
+def parse_pchome(url):
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
 
-def run():
-    products = supabase.table("products").select("*").execute().data
+        page.goto(url, wait_until="domcontentloaded")
+        page.wait_for_timeout(5000)  # ⭐關鍵：讓 API 跑完
 
-    for p in products:
-        data = parse_pchome(p["url"])
+        # 🧠 強制抓「按鈕是否可用」
+        buy_btn = page.query_selector("text=加入購物車")
 
-        old_stock = p.get("stock", False)
-        old_price = p.get("price")
+        stock = False
+        if buy_btn:
+            disabled = buy_btn.get_attribute("disabled")
+            stock = disabled is None
 
-        # 💾 update DB
-        supabase.table("products").update({
-            "name": data["name"],
-            "price": data["price"],
-            "stock": data["stock"]
-        }).eq("id", p["id"]).execute()
+        # fallback（避免漏判）
+        if "已售完" in page.content():
+            stock = False
 
-        # 🔔 補貨通知
-        if not old_stock and data["stock"]:
-            send(f"""🟢 補貨通知
-{data['name']}
-💰 {data['price']}
-🔗 {p['url']}""")
+        # name
+        name = page.title()
 
-        # 📉 降價通知
-        if (
-            old_price is not None and
-            data["price"] is not None and
-            data["price"] < old_price
-        ):
-            send(f"""📉 降價通知
-{data['name']}
-{old_price} → {data['price']}
-🔗 {p['url']}""")
-
-
-if __name__ == "__main__":
-    run()
+        return {
+            "name": name,
+            "stock": stock
+        }
