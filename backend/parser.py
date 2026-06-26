@@ -1,44 +1,38 @@
-import requests
 import re
-
-HEADERS = {"User-Agent": "Mozilla/5.0"}
-
-
-def extract_product_id(url):
-    match = re.search(r"prod/([A-Z0-9\-]+)", url)
-    return match.group(1) if match else None
-
-
-def detect_stock(html):
-    if "已售完" in html or "補貨中" in html:
-        return False
-    if "加入購物車" in html or "立即購買" in html:
-        return True
-    return True  # 避免誤判沒貨
+from bs4 import BeautifulSoup
+from crawler import fetch_page
 
 
 def parse_pchome(url):
-    product_id = extract_product_id(url)
-
-    r = requests.get(url, headers=HEADERS, timeout=10)
-    html = r.text
+    html = fetch_page(url)
+    soup = BeautifulSoup(html, "html.parser")
 
     # 🧠 name
-    m = re.search(r'<meta property="og:title" content="(.*?)"', html)
-    name = m.group(1) if m else "Unknown"
+    name_tag = soup.select_one("meta[property='og:title']")
+    name = name_tag["content"].strip() if name_tag else "Unknown"
 
-    # 💰 price（只做輔助）
+    # 💰 price（從畫面抓數字）
     price = None
-    m2 = re.search(r'"price"\s*:\s*"?(\d+)"?', html)
-    if m2:
-        price = int(m2.group(1))
+    text = soup.get_text()
 
-    # 📦 stock（關鍵改這裡）
-    stock = detect_stock(html)
+    m = re.search(r"NT\$?\\s?([0-9,]+)", text)
+    if m:
+        price = int(m.group(1).replace(",", ""))
+
+    # 📦 stock（關鍵：看按鈕）
+    stock = False
+
+    if soup.select_one("button:contains('加入購物車')"):
+        stock = True
+    elif "已售完" in text:
+        stock = False
+    elif "補貨中" in text:
+        stock = False
+    else:
+        stock = True  # fallback（避免誤判沒貨）
 
     return {
         "name": name,
         "price": price,
-        "stock": stock,
-        "product_id": product_id
+        "stock": stock
     }
