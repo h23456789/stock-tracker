@@ -3,7 +3,7 @@ import { db } from "./supabase.js";
 console.log("🔥 app.js loaded");
 
 /**
- * 🔄 讀取列表
+ * 📦 載入商品
  */
 async function load() {
   const { data, error } = await db
@@ -12,65 +12,47 @@ async function load() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("LOAD ERROR:", error);
+    console.error(error);
     return;
   }
 
   const list = document.getElementById("list");
 
-  if (!data || data.length === 0) {
-    list.innerHTML = "<p>目前沒有追蹤商品</p>";
-    return;
-  }
-
   list.innerHTML = data.map(p => `
     <div class="card">
-      <h3>${p.name || "（尚未解析商品）"}</h3>
-
-      <p>💰 價格：${p.price ?? "未取得"}</p>
-
+      <h3>${p.name || "（未解析）"}</h3>
+      <p>💰 ${p.price ?? "-"}</p>
       <p class="${p.stock ? "ok" : "no"}">
-        ${p.stock ? "🟢 有貨" : "🔴 無貨"}
+        ${p.stock ? "🟢 有貨" : "🔴 缺貨"}
       </p>
 
-      <a href="${p.url}" target="_blank">🔗 前往商品</a>
+      <a href="${p.url}" target="_blank">開啟商品</a>
 
       <button onclick="deleteProduct('${p.id}')">
-        🗑 刪除
+        刪除
       </button>
     </div>
   `).join("");
 }
 
 /**
- * ➕ 新增商品（先只存 URL）
+ * ➕ 新增商品
  */
 async function addProduct() {
-  const input = document.getElementById("url");
-  const url = input.value.trim();
+  const url = document.getElementById("url").value.trim();
 
-  if (!url) {
-    alert("請輸入網址");
-    return;
-  }
+  if (!url) return alert("請輸入網址");
 
-  console.log("➕ add:", url);
-
-  const { data, error } = await db
+  const { error } = await db
     .from("products")
-    .insert([{ url }])
-    .select()
-    .single();
+    .insert([{ url }]);
 
   if (error) {
-    console.error("INSERT ERROR:", error);
     alert(error.message);
     return;
   }
 
-  input.value = "";
-
-  // 🔄 先重新載入（之後 parser 可補資料）
+  document.getElementById("url").value = "";
   load();
 }
 
@@ -78,15 +60,12 @@ async function addProduct() {
  * 🗑 刪除商品
  */
 async function deleteProduct(id) {
-  console.log("🗑 delete:", id);
-
   const { error } = await db
     .from("products")
     .delete()
     .eq("id", id);
 
   if (error) {
-    console.error("DELETE ERROR:", error);
     alert(error.message);
     return;
   }
@@ -95,29 +74,15 @@ async function deleteProduct(id) {
 }
 
 /**
- * 🎯 初始化
+ * 🚀 初始化
  */
 function init() {
-  const btn = document.getElementById("addBtn");
-
-  if (!btn) {
-    console.error("❌ 找不到 addBtn");
-    return;
-  }
-
-  btn.addEventListener("click", addProduct);
-
-  console.log("✅ init done");
+  document.getElementById("addBtn")
+    .addEventListener("click", addProduct);
 
   load();
 }
 
-/**
- * 🌍 掛到 window（給 onclick 用）
- */
 window.deleteProduct = deleteProduct;
 
-/**
- * 🚀 DOM ready
- */
 document.addEventListener("DOMContentLoaded", init);
