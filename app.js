@@ -3,7 +3,9 @@ import { db } from "./supabase.js";
 async function add() {
   const url = document.getElementById("url").value;
 
-  const { error } = await db.from("products").insert([{ url }]);
+  const { error } = await db.from("products").insert([
+    { url }
+  ]);
 
   if (error) {
     alert(error.message);
@@ -25,7 +27,7 @@ async function load() {
     `).join("");
 }
 
-// ⭐ 關鍵：掛到 window
+// ⭐ 關鍵修復
 window.add = add;
 
 load();
