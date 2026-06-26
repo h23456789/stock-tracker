@@ -1,53 +1,58 @@
 import requests
 import re
-from bs4 import BeautifulSoup
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0"
-}
+HEADERS = {"User-Agent": "Mozilla/5.0"}
+
+def extract_product_id(url):
+    match = re.search(r"prod/([A-Z0-9\-]+)", url)
+    return match.group(1) if match else None
+
 
 def parse_pchome(url):
+    product_id = extract_product_id(url)
+
+    if not product_id:
+        return {
+            "name": "Unknown",
+            "price": None,
+            "stock": False,
+            "product_id": None
+        }
+
+    # 🔥 嘗試抓 PChome JSON API
+    api_url = f"https://24h.pchome.com.tw/prod/api/prod/{product_id}"
+
+    try:
+        r = requests.get(api_url, headers=HEADERS, timeout=10)
+
+        # 有些商品會 403 → fallback HTML
+        if r.status_code != 200:
+            return parse_html_fallback(url)
+
+        data = r.json()
+
+        return {
+            "name": data.get("name") or data.get("nick") or "Unknown",
+            "price": data.get("price"),
+            "stock": data.get("stockQty", 0) > 0,
+            "product_id": product_id
+        }
+
+    except Exception:
+        return parse_html_fallback(url)
+
+
+def parse_html_fallback(url):
     r = requests.get(url, headers=HEADERS, timeout=10)
     html = r.text
-    soup = BeautifulSoup(html, "html.parser")
 
-    # 🧠 1. 商品名稱（最穩）
-    name_tag = soup.select_one("meta[property='og:title']")
-    name = name_tag["content"].strip() if name_tag else "Unknown"
-
-    # 💰 2. 價格（多層 fallback）
-    price = None
-
-    # fallback A: JSON price
-    m = re.search(r'"price"\s*:\s*"?(\d+)"?', html)
-    if m:
-        price = int(m.group(1))
-
-    # fallback B: meta description（有時有）
-    if not price:
-        m2 = re.search(r'(\d{2,8})\s*元', html)
-        if m2:
-            price = int(m2.group(1))
-
-    # fallback C: fallback class（保留你原本）
-    if not price:
-        price_tag = soup.select_one(".price, .value")
-        if price_tag:
-            p = re.sub(r"[^0-9]", "", price_tag.text)
-            if p:
-                price = int(p)
-
-    # 📦 3. 庫存判斷（稍微升級）
-    stock_keywords = ["已售完", "售完", "無庫存", "補貨中", "缺貨"]
-    stock = not any(k in html for k in stock_keywords)
-
-    # 🆔 product id
-    match = re.search(r"prod/([A-Z0-9\-]+)", url)
-    product_id = match.group(1) if match else None
+    # fallback only name
+    m = re.search(r'<meta property="og:title" content="(.*?)"', html)
+    name = m.group(1) if m else "Unknown"
 
     return {
         "name": name,
-        "price": price,
-        "stock": stock,
-        "product_id": product_id
+        "price": None,
+        "stock": False,
+        "product_id": None
     }
